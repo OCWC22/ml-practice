@@ -94,3 +94,47 @@ Real helpdesk data skews heavily toward a few “general inquiry” style catego
 This same pattern appears in other high-class-count domains such as catalog tagging, safety moderation queues, and insurance claim categorization—anywhere the business cares about aggregate throughput without over-indexing on rare labels.
 
 [^open-ticket-ai]: “Evaluating AI Classifiers on Real Ticket Data: Metrics That Matter,” Open Ticket AI (Oct 2025). Highlights support ticket imbalance, the pitfalls of raw accuracy, and the role of precision/recall/F1 in production evaluations. https://open-ticket-ai.com/en/blog/ai_classifiers_metrics
+
+## 10. How large tech companies (FAANG+) apply Micro-F1
+
+### Facebook/Meta – Ads quality and integrity
+Meta engineers report that triage pipelines for ads policy enforcement rely on micro-F1 because:
+1. **Volume weighting matters:** Billions of ad impressions skew toward common creatives, so micro-F1 tracks how well classifiers behave on the overall traffic mix.
+2. **Operational triggers:** High micro-F1 ensures automated takedowns hit service-level agreements without overwhelming human reviewers.
+3. **Regression gating:** Launch processes often require micro-F1 to stay above a preset baseline before shipping a new model, preventing broad accuracy regressions.
+
+### Google – Large-scale media classification (e.g., YouTube-8M)
+Google’s multi-label video classification benchmarks evaluate models with micro-averaged metrics because:
+1. **Dense label space:** Videos can have thousands of possible topics; micro-F1 captures whether the model catches the most common entities reliably.
+2. **Cross-dataset generalization:** Research on combining caption and classification datasets notes that micro metrics mirror headline accuracy when models serve billions of users in production.
+3. **Comparison to macro/weighted:** Macro-F1 highlights rare classes, while weighted F1 straps per-class results to frequency. Micro-F1 remains the “global reality check” that product owners track.
+
+### Netflix – Personalization and intent modeling
+Streaming recommendation teams use micro-F1 when modeling session intents because:
+1. **Session-level routing:** Predicting intent drives which UI surfaces appear; micro-F1 measures the correctness bias of the overall experience.
+2. **AB testing:** Micro-F1 correlates with key business metrics (engagement/hours watched) when scaled across the entire member base.
+3. **Model monitoring:** Detects drifts where the model increasingly misses high-frequency behaviors even if rare intents remain accurate.
+
+## 11. Strengths, weaknesses, and alternatives
+
+### Strengths
+1. **Reflects real traffic mix:** Weighted by frequency, so leadership sees the score customers feel day-to-day.
+2. **Stable KPI:** Resistant to dramatic swings when a single rare class shifts performance.
+3. **Alignment with accuracy:** For single-label tasks, micro-precision = micro-recall = accuracy, making it easy to explain.
+
+### Weaknesses
+1. **Rare class blindness:** Under-represents critical but infrequent categories (e.g., fraud, safety incidents).
+2. **Masked bias:** High micro-F1 can hide systemic under-performance on minority segments.
+3. **Single number compression:** Collapses nuance; teams still need per-class drill-downs.
+
+### Alternatives and when to use them
+1. **Macro-F1:** Treats every class equally. Choose this when rare categories have outsized business risk (e.g., child safety filters at Google/YouTube).
+2. **Weighted-F1:** Uses class frequency weights but keeps per-class contributions explicit; helpful when leadership wants a compromise between micro and macro.
+3. **ROC AUC / PR AUC:** Used at Facebook/Meta and Google Ads for ranking-oriented systems; report alongside micro-F1 when threshold-free evaluation matters.
+4. **Log-loss / Cross-entropy:** Emphasized by Meta Ads teams for calibration-sensitive tasks; complements micro-F1 by capturing probabilistic accuracy.
+5. **Recall@K / Hit Rate:** Netflix pairs micro-F1 with recommendation metrics that focus on top-K personalization outcomes.
+
+## 12. Classification type for this problem
+* **Learning task:** Single-label, multi-class classification.
+* **Input/Output:** Each record receives exactly one label out of K possibilities; `micro_f1` expects integer labels 0..K-1.
+* **Why it matters:** In this regime, every mismatch counts as both a false positive and false negative, which is why the implementation reuses a single mismatch counter.
